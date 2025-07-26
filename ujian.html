@@ -1,0 +1,93 @@
+
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <title>Ujian Online</title>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 20px; max-width: 800px; margin: auto; }
+    .question { margin-bottom: 20px; }
+    .question h3 { margin: 0 0 10px 0; }
+    .options label { display: block; margin-left: 20px; }
+    #submitBtn { margin-top: 20px; }
+  </style>
+</head>
+<body>
+  <h1>Ujian Online</h1>
+  <form id="ujianForm">
+    <div id="soal_teknis"></div>
+    <div id="soal_psikologi"></div>
+    <button type="submit" id="submitBtn">Kirim Jawaban</button>
+  </form>
+  <div id="status"></div>
+
+  <script>
+    const endpoint = 'https://script.google.com/macros/s/YOUR_SCRIPT_ID/exec';
+    const urlParams = new URLSearchParams(window.location.search);
+    const token = urlParams.get('token');
+    const form = document.getElementById("ujianForm");
+    const statusDiv = document.getElementById("status");
+
+    async function loadSoal() {
+      const res = await fetch(endpoint + '?token=' + token);
+      const data = await res.json();
+      if (data.status !== 'success') {
+        statusDiv.innerText = 'Gagal memuat soal: ' + data.message;
+        return;
+      }
+      renderSoal(data.soal_teknis, "soal_teknis", "Teks");
+      renderSoal(data.soal_psikologi, "soal_psikologi", "Psikologi");
+    }
+
+    function renderSoal(soalList, containerId, title) {
+      const container = document.getElementById(containerId);
+      container.innerHTML = `<h2>Soal ${title}</h2>`;
+      soalList.forEach((soal, i) => {
+        const div = document.createElement("div");
+        div.className = "question";
+        div.innerHTML = \`
+          <h3>${i + 1}. ${soal.question_text}</h3>
+          <div class="options">
+            \${Object.entries(soal.options).map(([k, v]) => \`
+              <label><input type="radio" name="${containerId}_${i}" value="\${k}"> \${k}. \${v}</label>
+            \`).join('')}
+          </div>
+        \`;
+        container.appendChild(div);
+      });
+    }
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const answers_teknis = getJawaban("soal_teknis");
+      const answers_psikologi = getJawaban("soal_psikologi");
+
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token, answers_teknis, answers_psikologi })
+      });
+
+      const result = await response.json();
+      if (result.status === 'success') {
+        statusDiv.innerText = "Jawaban berhasil dikirim. Skor Teknis: " + result.skor_teknis + ", Psikologi: " + result.skor_psikologi;
+        form.style.display = "none";
+      } else {
+        statusDiv.innerText = "Gagal mengirim jawaban: " + result.message;
+      }
+    });
+
+    function getJawaban(prefix) {
+      const container = document.getElementById(prefix);
+      const answers = [];
+      container.querySelectorAll(".question").forEach((q, i) => {
+        const input = q.querySelector("input[type='radio']:checked");
+        answers.push(input ? input.value : null);
+      });
+      return answers;
+    }
+
+    loadSoal();
+  </script>
+</body>
+</html>
